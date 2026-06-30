@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { POI, SunPoisResponse, TimeWindow, WeatherData, RedditSignal } from "@/lib/types";
 import { TIME_WINDOW_OFFSETS } from "@/lib/types";
 
-export type FilterType = "all" | "terrace" | "bench";
+export type SunFilter = "sunny" | "shaded" | null;
 
 interface AppState {
   // Location
@@ -15,12 +15,14 @@ interface AppState {
   selectedWindow: TimeWindow;
 
   // Filters
-  filterType: FilterType;
-  sunnyOnly: boolean;
+  showTerrace: boolean;
+  showBench: boolean;
+  sunFilter: SunFilter;
   openNow: boolean;
 
   // Data
   sunData: SunPoisResponse | null;
+  lastFetchedAt: number | null; // epoch ms
   isLoading: boolean;
   error: string | null;
 
@@ -29,10 +31,12 @@ interface AppState {
 
   // Actions
   setLocation: (lat: number, lng: number) => void;
+  setMapCenter: (lat: number, lng: number) => void;
   setLocationError: (err: string) => void;
   setTimeWindow: (window: TimeWindow) => void;
-  setFilterType: (type: FilterType) => void;
-  setSunnyOnly: (v: boolean) => void;
+  toggleTerrace: () => void;
+  toggleBench: () => void;
+  setSunFilter: (v: SunFilter) => void;
   setOpenNow: (v: boolean) => void;
   setSelectedPOI: (poi: POI | null) => void;
   fetchSunData: () => Promise<void>;
@@ -44,16 +48,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   locationGranted: false,
   locationError: null,
   selectedWindow: "now",
-  filterType: "all",
-  sunnyOnly: false,
+  showTerrace: true,
+  showBench: true,
+  sunFilter: null,
   openNow: false,
   sunData: null,
+  lastFetchedAt: null,
   isLoading: false,
   error: null,
   selectedPOI: null,
 
   setLocation: (lat, lng) => {
     set({ userLat: lat, userLng: lng, locationGranted: true, locationError: null });
+    get().fetchSunData();
+  },
+
+  // Called by map moveend — updates query centre without triggering easeTo or locationGranted
+  setMapCenter: (lat, lng) => {
+    set({ userLat: lat, userLng: lng });
     get().fetchSunData();
   },
 
@@ -64,8 +76,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().fetchSunData();
   },
 
-  setFilterType: (type) => set({ filterType: type }),
-  setSunnyOnly: (v) => set({ sunnyOnly: v }),
+  toggleTerrace: () => set((s) => ({ showTerrace: !s.showTerrace })),
+  toggleBench: () => set((s) => ({ showBench: !s.showBench })),
+  setSunFilter: (v) => set({ sunFilter: v }),
   setOpenNow: (v) => set({ openNow: v }),
   setSelectedPOI: (poi) => set({ selectedPOI: poi }),
 
@@ -86,7 +99,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const res = await fetch(`/api/sun-pois?${params}`);
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       const data: SunPoisResponse = await res.json();
-      set({ sunData: data, isLoading: false });
+      set({ sunData: data, lastFetchedAt: Date.now(), isLoading: false });
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : "Failed to load data",
@@ -98,17 +111,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 
 /** Derived: filtered + sorted POI list */
 export function useFilteredPOIs(): POI[] {
-  const { sunData, filterType, sunnyOnly, openNow } = useAppStore();
+  const { sunData, showTerrace, showBench, sunFilter, openNow } = useAppStore();
 
   if (!sunData) return [];
 
   return sunData.pois.filter((poi) => {
-    if (filterType !== "all" && poi.type !== filterType) return false;
-    if (sunnyOnly && poi.sunStatus !== "sunny" && poi.sunStatus !== "margin") return false;
-    if (openNow && poi.type === "terrace" && poi.openingHours) {
-      // Basic open check — if we can't parse, include it
-      if (poi.openingHours.toLowerCase().includes("closed")) return false;
-    }
+    if (poi.type === "terrace" && !showTerrace) return false;
+    if (poi.type === "bench" && !showBench) return false;
+    if (sunFilter === "sunny" && poi.sunStatus !== "sunny" && poi.sunStatus !== "margin") return false;
+    if (sunFilter === "shaded" && poi.sunStatus !== "shaded") return false;
+    if (openNow && poi.type === "terrace" && poi.openingHours?.toLowerCase().includes("closed")) return false;
     return true;
   });
 }

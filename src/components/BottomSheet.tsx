@@ -31,6 +31,11 @@ function mapsDeepLink(poi: POI): string {
 }
 
 function googleMapsLink(poi: POI): string {
+  if (poi.type === "terrace") {
+    // Name + pinned coordinates → Google resolves the specific listing at that location
+    return `https://www.google.com/maps/search/${encodeURIComponent(poi.name)}/@${poi.lat},${poi.lng},18z`;
+  }
+  // Benches have no business listing — drop a pin on coordinates
   return `https://www.google.com/maps/search/?api=1&query=${poi.lat},${poi.lng}`;
 }
 

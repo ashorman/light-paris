@@ -5,6 +5,7 @@ import POIList from "@/components/POIList";
 import BottomSheet from "@/components/BottomSheet";
 import LocationButton from "@/components/LocationButton";
 import MapWrapper from "@/components/MapWrapper";
+import MapLegend from "@/components/MapLegend";
 
 export default function Home() {
   return (
@@ -16,6 +17,7 @@ export default function Home() {
       <div className="relative" style={{ height: "45dvh", flexShrink: 0 }}>
         <MapWrapper />
         <LocationButton />
+        <MapLegend />
       </div>
 
       {/* Bottom panel — scrollable list */}
