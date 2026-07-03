@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
+import { Analytics } from '@vercel/analytics/react';
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
@@ -40,6 +41,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased bg-zinc-100">
         {children}
+        <Analytics />
       </body>
     </html>
   );
